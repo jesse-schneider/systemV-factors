@@ -4,7 +4,7 @@ TOBJECTS = factors.o
 OBJECTS = $(SOBJECTS) $(COBJECTS) $(TOBJECTS)
 all: $(OBJECTS)
 	$(CC) $(SOBJECTS) -lm -lpthread -o server
-	$(CC) $(COBJECTS) -o client
+	$(CC) $(COBJECTS) -lpthread -o client
 	$(CC) $(TOBJECTS) -lpthread -lm -o factors
 server.o: server.c
 	$(CC) -c server.c

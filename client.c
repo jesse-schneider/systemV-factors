@@ -1,26 +1,24 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <unistd.h>
-#include <string.h>
-#include <errno.h>
 #include "memory.h"
 
+void * processQuery(void *);
+
+
+typedef struct Query {
+    int slot;
+    MemoryStruct *memptr;
+} Query;
 
 /*** clear shared memory: ipcs and ipcrm ***/
 
 void main(int argc, char **argv) {
     key_t shmKey;
     int shmId;
-    struct MemoryStruct *memptr;
+    MemoryStruct *memptr;
 
 
     //shared memory get function to get shared memory using unique key (made with ftok)
     shmKey = ftok(".", 'x');
-    shmId = shmget(shmKey, sizeof(struct MemoryStruct), IPC_CREAT | 0666);
-    printf("mem id: %d\n", shmId);
+    shmId = shmget(shmKey, sizeof(MemoryStruct), 0666);
     if(shmId < 0) {
         printf("*** shmget error (client) ***\n");
         perror("shmget");
@@ -28,24 +26,19 @@ void main(int argc, char **argv) {
     }
 
 
-    memptr = (struct MemoryStruct *) shmat(shmId, NULL, 0);
+    memptr = (MemoryStruct *) shmat(shmId, NULL, 0);
     if((int) memptr == -1) {
         printf("*** shamt error (client) ***\n");
         exit(1);
     }
 
-    printf("client has attached the shared memory...\n");
-    memptr->serverflag;
-
-
-    memptr->clientflag = EMPTY;
     //client infinite loop
-    while(1) {
-        char buffer[100] = {0};
+    // while(1) {
+        char buffer[100] = "4294967285";
      
         //user prompt and input
         printf("command> ");
-        gets(buffer);
+        // gets(buffer);
 
         //quit command
         if(strcmp(buffer, "quit") == 0) {
@@ -55,15 +48,58 @@ void main(int argc, char **argv) {
             exit(0);
         }
 
-        memptr->number = atol(buffer);
-        printf("client has filled  %u to shared memory...\n" ,memptr->number);
+        memptr->number = atoi(buffer);
+        printf("client has filled %u to shared memory...\n" ,memptr->number);
+
+        pthread_mutex_unlock(&memptr->client);
         memptr->clientflag = FULL;
+        
 
-        while (memptr->clientflag != EMPTY) {
-            sleep(1);
-        }
-
+        while (memptr->clientflag != EMPTY)
+            ;
         int slot = memptr->number;
         printf("slot: %d\n", slot);
+        Query q = {slot, memptr};
+
+        pthread_t queryThread;
+        pthread_create(&queryThread, NULL, processQuery, (void *) &q);
+        pthread_join(queryThread, NULL);
+    // }
+}
+
+
+void * processQuery(void *query) {
+
+    Query * q = (Query *) query;
+    unsigned int slot = (*q).slot;
+    MemoryStruct * memptr = (*q).memptr;
+    int threads = 0;
+
+    while (threads < 31) {
+        while (memptr->serverflag[slot] == EMPTY)
+                ;
+
+            if(memptr->serverflag[slot] == FULL) {
+                printf("factor: %d\n", memptr->slots[slot]);
+                // lock serverflag with mutex
+                pthread_mutex_unlock(&memptr->server[slot]);
+                memptr->serverflag[slot] = EMPTY;
+                
+            } else if (memptr->serverflag[slot] == COMPLETE) {
+                threads++;
+                printf("Threads: %d\n", threads);
+                // lock serverflag with mutex
+                pthread_mutex_unlock(&memptr->server[slot]);
+                memptr->serverflag[slot] = EMPTY;
+            }
+            
+            
+            // unlock serverflag with mutex
+                 
     }
+
+    printf("query complete");
+
+    
+    return NULL;
 }
