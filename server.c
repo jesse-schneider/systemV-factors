@@ -60,6 +60,7 @@ void * factorNumber(void * threadQuery) {
 
 
 void * handleQuery(void * query) {
+    
     //extract variables from ServerQuery Struct
     ServerQuery * q = (ServerQuery *) query;
     int slot = (*q).slot;
@@ -84,7 +85,6 @@ void * handleQuery(void * query) {
 
     printf("all threads complete\n");
     sem_post(queue);
-    memptr->serverflag[slot] = 0;
     return NULL;
 }
 

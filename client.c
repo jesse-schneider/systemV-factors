@@ -55,11 +55,12 @@ void main(int argc, char **argv) {
         pthread_cond_signal(&memptr->clientCond);
         pthread_mutex_unlock(&memptr->client);
     
-        usleep(3800);
+        usleep(500000);
 
         pthread_mutex_lock(&memptr->client);
         while (memptr->clientflag != EMPTY)
             pthread_cond_wait(&memptr->clientCond, &memptr->client);
+            
 
         int slot = memptr->number;
         // printf("slot: %d\n", slot);
@@ -74,12 +75,12 @@ void main(int argc, char **argv) {
 
 
 void * processQuery(void *query) {
-
     Query * q = (Query *) query;
     unsigned int slot = (*q).slot;
     MemoryStruct * memptr = (*q).memptr;
     int threads = 0;
 
+    printf("slot: %d\n", slot);
     //while all threads are running
     while (threads < 32) {
         //lock on to allocated slot and wait for new data
@@ -99,6 +100,10 @@ void * processQuery(void *query) {
         pthread_mutex_unlock(&memptr->server[slot]);
         usleep(3800); 
     }
+
+    pthread_mutex_lock(&memptr->server[slot]);
+    memptr->serverflag[slot] = 0;
+    pthread_mutex_unlock(&memptr->server[slot]);
 
     printf("query complete");
     return NULL;
