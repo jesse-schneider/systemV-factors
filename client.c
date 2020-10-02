@@ -1,5 +1,4 @@
 #include "memory.h"
-
 void * processQuery(void *);
 
 
@@ -8,9 +7,9 @@ typedef struct Query {
     MemoryStruct *memptr;
 } Query;
 
-/*** clear shared memory: ipcs and ipcrm ***/
-
 void main(int argc, char **argv) {
+
+    //init shared memory variables
     key_t shmKey;
     int shmId;
     MemoryStruct *memptr;
@@ -25,7 +24,6 @@ void main(int argc, char **argv) {
         exit(1);
     }
 
-
     memptr = (MemoryStruct *) shmat(shmId, NULL, 0);
     if((int) memptr == -1) {
         printf("*** shamt error (client) ***\n");
@@ -33,12 +31,13 @@ void main(int argc, char **argv) {
     }
 
     //client infinite loop
-    // while(1) {
-        char buffer[100] = "4294967285";
+    while(1) {
+        //94967285
+        char buffer[100] = {0};
      
         //user prompt and input
-        printf("command> ");
-        // gets(buffer);
+        printf("\ncommand> ");
+        gets(buffer);
 
         //quit command
         if(strcmp(buffer, "quit") == 0) {
@@ -48,23 +47,29 @@ void main(int argc, char **argv) {
             exit(0);
         }
 
+        //lock client mutex, put number into server, send signal to server
+        pthread_mutex_lock(&memptr->client);
         memptr->number = atoi(buffer);
-        printf("client has filled %u to shared memory...\n" ,memptr->number);
-
-        pthread_mutex_unlock(&memptr->client);
         memptr->clientflag = FULL;
-        
 
+        pthread_cond_signal(&memptr->clientCond);
+        pthread_mutex_unlock(&memptr->client);
+    
+        usleep(3800);
+
+        pthread_mutex_lock(&memptr->client);
         while (memptr->clientflag != EMPTY)
-            ;
+            pthread_cond_wait(&memptr->clientCond, &memptr->client);
+
         int slot = memptr->number;
-        printf("slot: %d\n", slot);
+        // printf("slot: %d\n", slot);
         Query q = {slot, memptr};
+        pthread_mutex_unlock(&memptr->client);
 
         pthread_t queryThread;
         pthread_create(&queryThread, NULL, processQuery, (void *) &q);
-        pthread_join(queryThread, NULL);
-    // }
+        // pthread_join(queryThread, NULL);
+    }
 }
 
 
@@ -75,31 +80,26 @@ void * processQuery(void *query) {
     MemoryStruct * memptr = (*q).memptr;
     int threads = 0;
 
-    while (threads < 31) {
-        while (memptr->serverflag[slot] == EMPTY)
-                ;
+    //while all threads are running
+    while (threads < 32) {
+        //lock on to allocated slot and wait for new data
+        pthread_mutex_lock(&memptr->server[slot]);
+        while (memptr->serverflag[slot] != FULL && memptr->serverflag[slot] != COMPLETE)
+            pthread_cond_wait(&memptr->clientCond, &memptr->client);
 
-            if(memptr->serverflag[slot] == FULL) {
-                printf("factor: %d\n", memptr->slots[slot]);
-                // lock serverflag with mutex
-                pthread_mutex_unlock(&memptr->server[slot]);
-                memptr->serverflag[slot] = EMPTY;
-                
-            } else if (memptr->serverflag[slot] == COMPLETE) {
-                threads++;
-                printf("Threads: %d\n", threads);
-                // lock serverflag with mutex
-                pthread_mutex_unlock(&memptr->server[slot]);
-                memptr->serverflag[slot] = EMPTY;
-            }
-            
-            
-            // unlock serverflag with mutex
-                 
+        //check the new data (either factor or completed thread)
+        if(memptr->serverflag[slot] == FULL) {
+            printf("factor: %d\r", memptr->slots[slot]);   
+        } else if (memptr->serverflag[slot] == COMPLETE)
+            threads++;
+
+        //reset serverflag to empty and send signal to any blocked server threads
+        memptr->serverflag[slot] = EMPTY;
+        pthread_cond_signal(&memptr->serverCond[slot]);
+        pthread_mutex_unlock(&memptr->server[slot]);
+        usleep(3800); 
     }
 
     printf("query complete");
-
-    
     return NULL;
 }

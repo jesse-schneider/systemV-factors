@@ -9,17 +9,24 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <math.h>
+#include <semaphore.h>
+#include <fcntl.h>
 #define EMPTY 0
 #define FULL 1
 #define COMPLETE 2
+#define NUM_SLOTS 10
+#define NUM_THREADS 32
+
+/*** clear shared memory: ipcs and ipcrm ***/
 
 
 typedef struct MemoryStruct {
     char clientflag;
     unsigned int number;
-    char serverflag[10];
-    int slots[10];
+    int serverflag[NUM_SLOTS];
+    int slots[NUM_SLOTS];
+    pthread_cond_t clientCond;
     pthread_mutex_t client;
-    pthread_mutex_t numMutex;
-    pthread_mutex_t server[10];
+    pthread_mutex_t server[NUM_SLOTS];
+    pthread_cond_t serverCond[NUM_SLOTS];
 } MemoryStruct;
