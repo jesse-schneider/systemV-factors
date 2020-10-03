@@ -1,87 +1,12 @@
 #include "memory.h"
 
-void * factorNumber(void *);
-unsigned int rotateRight(unsigned int);
-void * handleQuery(void *);
-
+/** ServerQueru Struct - Represents a Query to be Factorised using threads **/
 typedef struct ServerQuery {
     unsigned int number;
     int slot;
     MemoryStruct * memptr;
     sem_t * queue;
 } ServerQuery;
-
-
-unsigned int rotateRight(unsigned int num) {
-    return num >> 1 | num << 31;
-}
-
-
-/** Trial By Division Factorisation **/
-void * factorNumber(void * threadQuery) {
-    //extract variables from ServerQuery Struct
-    ServerQuery * q = (ServerQuery *) threadQuery;
-    int slot = (*q).slot;
-    unsigned int num = (*q).number;
-    MemoryStruct * memptr = (*q).memptr;
-    
-    int checkFactor = 2;
-   
-    // While loop < square root
-    while((checkFactor) <= ceil(sqrt(num))) {
-        // If == 0, then is a factor 
-        if(num % checkFactor == 0) {
-            pthread_mutex_lock(&memptr->server[slot]);
-            while(memptr->serverflag[slot] != EMPTY)
-                pthread_cond_wait(&memptr->serverCond[slot], &memptr->server[slot]);
-            memptr->slots[slot] = checkFactor;
-            memptr->serverflag[slot] = FULL;
-            pthread_cond_signal(&memptr->serverCond[slot]);
-            pthread_mutex_unlock(&memptr->server[slot]);
-        }
-        checkFactor++;
-    }
-
-    //thread has finished factoring, send COMPLETE signal to client
-    pthread_mutex_lock(&memptr->server[slot]);
-    while(memptr->serverflag[slot] != EMPTY)
-        pthread_cond_wait(&memptr->serverCond[slot], &memptr->server[slot]);
-    memptr->serverflag[slot] = COMPLETE;
-    pthread_cond_signal(&memptr->serverCond[slot]);
-    pthread_mutex_unlock(&memptr->server[slot]);
-    return NULL;
-}
-
-
-
-void * handleQuery(void * query) {
-    
-    //extract variables from ServerQuery Struct
-    ServerQuery * q = (ServerQuery *) query;
-    int slot = (*q).slot;
-    unsigned int rotatedNum = (*q).number;
-    MemoryStruct * memptr = (*q).memptr;
-    sem_t * queue = (*q).queue;
-
-    //create pthread array for all 32 threads
-    pthread_t threads[NUM_THREADS];
-    
-    //create threads
-    for (int i = 0; i < NUM_THREADS; i++) {
-        ServerQuery n = {rotatedNum, slot, memptr, queue};
-        pthread_create(&threads[i], NULL, factorNumber, (void *) &n);
-        rotatedNum = rotateRight(rotatedNum);
-    }
-    
-    //join completed threads
-    for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_join(threads[i], NULL);
-    }
-
-    printf("--Query %d completed--\n", slot);
-    sem_post(queue);
-    return NULL;
-}
 
 
 void main(void) {
@@ -114,7 +39,6 @@ void main(void) {
         printf("*** shmget error (server) ***\n");
         exit(1);
     }
-
     memptr = (MemoryStruct *) shmat(shmId, NULL, 0);
     if((int) memptr == -1) {
         printf("*** shamt error (server) ***\n");
@@ -123,12 +47,14 @@ void main(void) {
 
     printf("--server has attached the shared memory--\n");
 
+
     //init client flag and client flag mutex/condition variable
     memptr->clientflag = EMPTY;
     pthread_mutex_init(&memptr->client, &attrmutex);
     pthread_cond_init(&memptr->clientCond, &attrcond);
 
-    //set shared memory arrays to 0s
+
+    //init shared memory arrays to 0s
     for(int i = 0; i < NUM_SLOTS; i++) {
         memptr->serverflag[i] = EMPTY;
         memptr->slots[i] = 0;
@@ -140,13 +66,13 @@ void main(void) {
         pthread_cond_init(&memptr->serverCond[i], &attrcond);
     }
     
-
+    //server inifinite loop
     while(1) {
         //lock thread, wait for client flag to be populated by client
         pthread_mutex_lock(&memptr->client);
         while(memptr->clientflag != FULL)
             pthread_cond_wait(&memptr->clientCond, &memptr->client);
-
+        
         //sem_wait operation to check if a slot is avaiable to take the query
         sem_wait(queue);
 
@@ -163,8 +89,80 @@ void main(void) {
             }
         }
     }
+}
 
-    shmdt((void *) memptr);
-    printf("server has detached it's shared memory...\n");
-    exit(0);
+
+
+/** Function to perform right rotations **/
+unsigned int rotateRight(unsigned int num) {
+    return num >> 1 | num << 31;
+}
+
+
+
+/** Function to handle a single query in a new thread **/
+void * handleQuery(void * query) {
+    
+    //extract variables from ServerQuery Struct
+    ServerQuery * q = (ServerQuery *) query;
+    int slot = (*q).slot;
+    unsigned int rotatedNum = (*q).number;
+    MemoryStruct * memptr = (*q).memptr;
+    sem_t * queue = (*q).queue;
+
+    //create pthread array for all 32 threads
+    pthread_t threads[NUM_THREADS];
+    
+    //create threads
+    for (int i = 0; i < NUM_THREADS; i++) {
+        ServerQuery n = {rotatedNum, slot, memptr, queue};
+        pthread_create(&threads[i], NULL, factorNumber, (void *) &n);
+        rotatedNum = rotateRight(rotatedNum);
+    }
+    
+    //join completed threads
+    for (int i = 0; i < NUM_THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    printf("--Query %d completed--\n", slot);
+    sem_post(queue);
+    return NULL;
+}
+
+
+
+/** Trial By Division Factorisation Thread function **/
+void * factorNumber(void * threadQuery) {
+    //extract variables from ServerQuery Struct
+    ServerQuery * q = (ServerQuery *) threadQuery;
+    int slot = (*q).slot;
+    unsigned int num = (*q).number;
+    MemoryStruct * memptr = (*q).memptr;
+    
+    int checkFactor = 2;
+   
+    // While loop < square root
+    while((checkFactor) <= ceil(sqrt(num))) {
+        // If == 0, then is a factor 
+        if(num % checkFactor == 0) {
+            pthread_mutex_lock(&memptr->server[slot]);
+            while(memptr->serverflag[slot] != EMPTY)
+                pthread_cond_wait(&memptr->serverCond[slot], &memptr->server[slot]);
+            memptr->slots[slot] = checkFactor;
+            memptr->serverflag[slot] = FULL;
+            pthread_cond_signal(&memptr->serverCond[slot]);
+            pthread_mutex_unlock(&memptr->server[slot]);
+        }
+        checkFactor++;
+    }
+
+    //thread has finished factoring, send COMPLETE signal to client
+    pthread_mutex_lock(&memptr->server[slot]);
+    while(memptr->serverflag[slot] != EMPTY)
+        pthread_cond_wait(&memptr->serverCond[slot], &memptr->server[slot]);
+    memptr->serverflag[slot] = COMPLETE;
+    pthread_cond_signal(&memptr->serverCond[slot]);
+    pthread_mutex_unlock(&memptr->server[slot]);
+    return NULL;
 }

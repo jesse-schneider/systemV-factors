@@ -14,11 +14,9 @@
 #define EMPTY 0
 #define FULL 1
 #define COMPLETE 2
-#define TOO_MANY 99
 #define NUM_SLOTS 10
 #define NUM_THREADS 32
 
-/*** clear shared memory: ipcs and ipcrm ***/
 
 
 typedef struct MemoryStruct {
@@ -31,3 +29,15 @@ typedef struct MemoryStruct {
     pthread_mutex_t server[NUM_SLOTS];
     pthread_cond_t serverCond[NUM_SLOTS];
 } MemoryStruct;
+
+
+
+/******** Server/Producer Prototypes ********/
+void * factorNumber(void *);
+unsigned int rotateRight(unsigned int);
+void * handleQuery(void *);
+
+
+/******** Client/Consumer Prototypes ********/
+void * processQuery(void *);
+void * displayProgress(void *);
