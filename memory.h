@@ -14,6 +14,7 @@
 #define EMPTY 0
 #define FULL 1
 #define COMPLETE 2
+#define TOO_MANY 99
 #define NUM_SLOTS 10
 #define NUM_THREADS 32
 

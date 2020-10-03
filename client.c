@@ -6,7 +6,6 @@ void * displayProgress(void *);
 typedef struct Progress {
     int * progress;
     int * queries;
-    int slot;
 } Progress;
 
 typedef struct Query {
@@ -53,6 +52,11 @@ void main(int argc, char **argv) {
         printf("\n32-bit integer> ");
         gets(buffer);
         printf("\n");
+
+        if(queries >= 10) {
+            printf("Warning: server currently too busy for your request.\n");
+            continue;
+        }
         
         //quit command
         if(strcmp(buffer, "quit") == 0) {
@@ -75,6 +79,11 @@ void main(int argc, char **argv) {
         pthread_mutex_lock(&memptr->client);
         while (memptr->clientflag != EMPTY)
             pthread_cond_wait(&memptr->clientCond, &memptr->client);
+        
+        if(memptr->clientflag == TOO_MANY) {
+            printf("Warning: server is currently busy, please wait\n");
+            continue;
+        }
             
 
         int slot = memptr->number;
@@ -103,7 +112,7 @@ void * processQuery(void *query) {
     
     if(display == 0) {
         display = 1;
-        Progress p = {progress, queries, slot};
+        Progress p = {progress, queries};
         pthread_create(&displayThread, NULL, displayProgress, (void *) &p);
     }
     
@@ -128,7 +137,7 @@ void * processQuery(void *query) {
         pthread_cond_signal(&memptr->serverCond[slot]);
         pthread_mutex_unlock(&memptr->server[slot]);
         //usleep(3800); 
-        usleep(20000);
+        usleep(50000);
     }
 
     pthread_mutex_lock(&memptr->server[slot]);
@@ -139,8 +148,8 @@ void * processQuery(void *query) {
 
     stop = clock();
     duration = (double) (stop-start)/CLOCKS_PER_SEC;
-    printf("\n\nQuery %d duration>> %lf s\n\n", (slot+1), duration);
-    printf(">");
+    printf("\n\nQuery %d time taken>>> %lf \n\n", (slot+1), duration);
+    printf("\33[2K\r>");
     return NULL;
 }
 
@@ -148,7 +157,6 @@ void * processQuery(void *query) {
 void * displayProgress(void * prog) {
 
     Progress * p = (Progress *) prog;
-    int * slot = (*p).slot;
     int * progress = (*p).progress;
     int * queries = (*p).queries;
 

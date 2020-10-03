@@ -1,11 +1,8 @@
-
-
 #include "memory.h"
 
 void * factorNumber(void *);
 unsigned int rotateRight(unsigned int);
 void * handleQuery(void *);
-
 
 typedef struct ServerQuery {
     unsigned int number;
@@ -37,7 +34,6 @@ void * factorNumber(void * threadQuery) {
             pthread_mutex_lock(&memptr->server[slot]);
             while(memptr->serverflag[slot] != EMPTY)
                 pthread_cond_wait(&memptr->serverCond[slot], &memptr->server[slot]);
-
             memptr->slots[slot] = checkFactor;
             memptr->serverflag[slot] = FULL;
             pthread_cond_signal(&memptr->serverCond[slot]);
@@ -50,7 +46,6 @@ void * factorNumber(void * threadQuery) {
     pthread_mutex_lock(&memptr->server[slot]);
     while(memptr->serverflag[slot] != EMPTY)
         pthread_cond_wait(&memptr->serverCond[slot], &memptr->server[slot]);
-        printf("complete: %d\n", memptr->serverflag[slot]);
     memptr->serverflag[slot] = COMPLETE;
     pthread_cond_signal(&memptr->serverCond[slot]);
     pthread_mutex_unlock(&memptr->server[slot]);
@@ -83,7 +78,7 @@ void * handleQuery(void * query) {
         pthread_join(threads[i], NULL);
     }
 
-    printf("all threads complete\n");
+    printf("--Query %d completed--\n", slot);
     sem_post(queue);
     return NULL;
 }
@@ -115,7 +110,6 @@ void main(void) {
     //shared memory get function to get shared memory using unique key (made with ftok)
     shmKey = ftok(".", 'x');
     shmId = shmget(shmKey, sizeof(MemoryStruct), IPC_CREAT | 0666);
-    printf("mem id: %d\n", shmId);
     if(shmId < 0) {
         printf("*** shmget error (server) ***\n");
         exit(1);
@@ -127,7 +121,7 @@ void main(void) {
         exit(1);
     }
 
-    printf("server has attached the shared memory...\n");
+    printf("--server has attached the shared memory--\n");
 
     //init client flag and client flag mutex/condition variable
     memptr->clientflag = EMPTY;
@@ -153,13 +147,12 @@ void main(void) {
         while(memptr->clientflag != FULL)
             pthread_cond_wait(&memptr->clientCond, &memptr->client);
 
-        //sem_wait
+        //sem_wait operation to check if a slot is avaiable to take the query
         sem_wait(queue);
-        unsigned int num = memptr->number;
 
+        unsigned int num = memptr->number;
         for(int i = 0; i < NUM_SLOTS; i++) {
             if(memptr->serverflag[i] == EMPTY) {
-                printf("slot found: %d\n", i);
                 memptr->number = i;
                 memptr->clientflag = EMPTY;
                 pthread_cond_signal(&memptr->clientCond);
