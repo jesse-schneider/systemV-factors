@@ -52,7 +52,7 @@ void main(int argc, char **argv) {
     
         //user prompt and input
         printf("\n32-bit integer> ");
-        gets(buffer);
+        fgets(buffer, 100, stdin);
         printf("\n");
 
         //show user warning message if server is busy
@@ -62,7 +62,7 @@ void main(int argc, char **argv) {
         }
         
         //quit command
-        if(strcmp(buffer, "quit") == 0) {
+        if(strcmp(buffer, "quit\n") == 0) {
             printf("Exiting gracefully...\n");
             shmdt((void *) memptr);
             shmctl(shmId, IPC_RMID, NULL);
@@ -172,7 +172,7 @@ void * displayProgress(void * prog) {
         printf("\33[2K\r");
         for(int i = 0; i < NUM_SLOTS; i++) {
             if(progress[i] != 0) {
-                printf("Query %d: %d%\t", (i+1), (progress[i] * 100) / NUM_THREADS);
+                printf("Query %d: %d%%\t", (i+1), (progress[i] * 100) / NUM_THREADS);
             }
         }
         printf(">");

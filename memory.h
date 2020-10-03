@@ -7,7 +7,6 @@
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
-#include <semaphore.h>
 #include <math.h>
 #include <semaphore.h>
 #include <fcntl.h>
