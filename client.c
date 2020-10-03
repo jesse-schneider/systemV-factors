@@ -105,6 +105,9 @@ void * processQuery(void *query) {
     int * progress = (*q).progress;
     int * queries = (*q).queries;
 
+    int * results = (int*) calloc(1000, sizeof(int*));
+    int count = 0;
+
     //init clock and start timer
     clock_t start, stop;
     double duration;
@@ -129,6 +132,8 @@ void * processQuery(void *query) {
         //check the new data (either factor or completed thread)
         if(memptr->serverflag[slot] == FULL) {
             // printf("factor: %u\r", memptr->slots[slot]);
+            results[count] = memptr->slots[slot];
+            count++;
             fflush(stdout);
         } else if (memptr->serverflag[slot] == COMPLETE)
             progress[slot]++;
@@ -137,8 +142,8 @@ void * processQuery(void *query) {
         memptr->serverflag[slot] = EMPTY;
         pthread_cond_signal(&memptr->serverCond[slot]);
         pthread_mutex_unlock(&memptr->server[slot]);
-        usleep(3800); 
-        //usleep(50000);
+        //usleep(3800); 
+        usleep(25000);
     }
 
     //reset all variables for use by a future query
@@ -150,8 +155,12 @@ void * processQuery(void *query) {
 
     //stop and show the cpu time taken to perform the request 
     stop = clock();
-    duration = (double) (stop-start)/CLOCKS_PER_SEC;
-    printf("\n\nQuery %d time taken>>> %lf \n\n", (slot+1), duration);
+    duration = (double) (stop-start) / CLOCKS_PER_SEC;
+    printf("\n\nQuery %d factors:\n", (slot+1));
+    for(int i = 0; i < count; i++)
+        printf("%d ", results[i]);
+    free(results);
+    printf("\n\nQuery %d time taken>>> %lf s\n\n", (slot+1), duration);
     printf("\33[2K\r>");
     return NULL;
 }
