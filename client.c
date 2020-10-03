@@ -105,7 +105,7 @@ void * processQuery(void *query) {
     int * progress = (*q).progress;
     int * queries = (*q).queries;
 
-    int * results = (int*) calloc(1000, sizeof(int*));
+    int * results = (int*) calloc(1000, sizeof(int));
     int count = 0;
 
     //init clock and start timer
